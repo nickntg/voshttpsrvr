@@ -1,0 +1,7 @@
+fields:
+
+webdir         char(256) var;
+
+organization: sequential;
+
+end;

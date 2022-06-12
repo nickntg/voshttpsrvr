@@ -1,0 +1,66 @@
+dcl 1 open_file_info          shortmap,
+     2 version                bin(15),
+     2 file_organization      bin(15),
+     2 date_time_used         bin(31),
+     2 date_time_modified     bin(31),
+     2 date_time_saved        bin(31),
+     2 date_time_created      bin(31),
+     2 switches               bin(15),
+     2 maximum_record_length  bin(15),
+     2 last_record_number     bin(31),
+     2 blocks_used            bin(31),
+     2 number_indexes         bin(15),
+     2 allocation_length      bin(31),
+     2 access_code            char(1),
+     2 reserved1              char(1),
+     2 expiration_date        bin(31),
+     2 author_name            char(65) var,
+     2 reserved               (2) fixed dec(18),
+     2 max_queue_depth        bin(31),
+     2 character_set          bin(15),
+     2 shift_mode             bin(15),
+     2 extent_size            bin(31),
+     2 initial_allocated_size bin(31),
+     2 tag_type               bin(15),
+     2 tag_version            bin(15);
+
+dcl s$seq_open entry (char(256) var, bin(15), bin(15), bin(15));
+dcl s$seq_read entry (bin(15), bin(15), bin(15), char(*), bin(15));
+dcl s$seq_write entry (bin(15), bin(15), char(*), bin(15));
+dcl s$close entry (bin(15), bin(15));
+dcl s$attach_port entry (char(*) var, char(256) var, bin(15), bin(15), bin(15));
+dcl s$detach_port entry (bin(15), bin(15));
+dcl s$get_current_dir entry (char(*) var);
+dcl s$error entry (bin(15), char(*) var, char(*) var);
+dcl s$get_open_file_info entry (bin(15), 1 like open_file_info, char(65) var, bin(15));
+
+dcl after           entry (char(*) var, char(*) var) returns(char(256) var);
+dcl before          entry (char(*) var, char(*) var) returns(char(256) var);
+
+%replace END_OF_FILE          by 1025;
+
+%replace CONF_FILE            by 'httpconf.table';
+%replace MIME_TYPES_FILE      by 'mime.txt';
+%replace MAX_MIME_TYPES       by 150;
+%replace ERRORS_DIR           by 'errors';
+%replace MAX_ERRORS           by 20;
+
+%replace CRLF                 by '
+';
+
+dcl 1 httpconf      external static shared,
+     2 webdir       char(256) var;
+dcl httpBuffer      char(262) defined(httpconf);
+
+dcl 1 MIMETypes     (MAX_MIME_TYPES) external static shared,
+     2 MIMEHead     char(32) var,
+     2 MIMEContent  char(32) var;
+dcl MIMEBuffer      char(10200) defined(MIMETypes);
+
+dcl 1 ErrorFiles    (MAX_ERRORS) external static shared,
+     2 ErrorNum     bin(15),
+     2 ErrorDesc    char(64) var,
+     2 ErrorFile    char(256) var;
+dcl ErrorBuffer     char(6520) defined(ErrorFiles);
+
+dcl defaultURL      (4) char(64) var external static shared;

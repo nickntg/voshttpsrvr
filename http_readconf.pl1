@@ -1,0 +1,155 @@
+http_readconf: procedure returns(bin(15));
+
+%include 'httpconf';
+
+dcl eCode           bin(15);
+dcl dCode           bin(15);
+
+dcl io_mode         bin(15);
+dcl port_id         bin(15);
+dcl bytesRead       bin(15);
+
+dcl curDir          char(256) var;
+
+dcl inString        char(100) var;
+dcl 1 inBuffer      defined(inString),
+     2 inBufferLen  bin(15),
+     2 inBufferData char(100);
+
+dcl i               bin(15);
+
+     eCode = 0;
+
+     call s$get_current_dir(curDir);
+
+     io_mode = 1;
+     call s$seq_open(curDir || '>' || CONF_FILE, io_mode, port_id, eCode);
+     if eCode ^= 0 then
+          do;
+           call s$error(eCode, '', ' - opening configuration file.');
+           return(eCode);
+          end;
+
+/*     httpconf.webdir = '%stratuz#d1>SysAdmin>NTG>c>webs';
+     call s$seq_write(port_id, bytesize(httpconf), httpBuffer, eCode);*/
+
+     call s$seq_read(port_id, bytesize(httpconf), bytesRead, httpBuffer, eCode);
+
+     call s$close(port_id, dCode);
+     call s$detach_port(port_id, dCode);
+
+     if eCode ^= 0 then
+          do;
+           call s$error(eCode, '', ' - reading configuration file.');
+           return(eCode);
+          end;
+
+     io_mode = 1;
+     call s$seq_open(curDir || '>' || MIME_TYPES_FILE, io_mode, port_id, eCode);
+     if eCode ^= 0 then
+          do;
+           call s$error(eCode, '', ' - opening MIME types file.');
+           return(eCode);
+          end;
+
+     i = 0;
+     do while (eCode = 0);
+          call s$seq_read(port_id, 100, inBufferLen,  inBufferData, eCode);
+          if eCode = 0 then
+               do;
+                inString = ltrim(rtrim(inString));
+                i = i + 1;
+                MIMETypes(i).MIMEHead = before(inString, '=');
+                MIMETypes(i).MIMEContent = after(inString, '=');
+               end;
+     end;
+
+     call s$close(port_id, dCode);
+     call s$detach_port(port_id, dCode);
+
+     if eCode = END_OF_FILE then
+          eCode = 0;
+     else
+          do;
+           call s$error(eCode, '', ' - reading MIME types file.');
+           return(eCode);
+          end;
+
+     ErrorFiles(1).ErrorNum = 400;
+     ErrorFiles(1).ErrorDesc = 'Bad request';
+     call checkFile('text-400.htm');
+     if eCode = 0 then
+          ErrorFiles(1).ErrorFile = 'text-400.htm';
+     ErrorFiles(2).ErrorNum = 401;
+     ErrorFiles(2).ErrorDesc = 'Your username and/or password are invalid';
+     call checkFile('text-401.htm');
+     if eCode = 0 then
+          ErrorFiles(2).ErrorFile = 'text-401.htm';
+     ErrorFiles(3).ErrorNum = 402;
+     ErrorFiles(3).ErrorDesc = 'Payment is required to access this resource';
+     call checkFile('text-402.htm');
+     if eCode = 0 then
+          ErrorFiles(3).ErrorFile = 'text-402.htm';
+     ErrorFiles(4).ErrorNum = 403;
+     ErrorFiles(4).ErrorDesc = 'You are not authorised to access this resource';
+     call checkFile('text-403.htm');
+     if eCode = 0 then
+          ErrorFiles(4).ErrorFile = 'text-403.htm';
+     ErrorFiles(5).ErrorNum = 404;
+     ErrorFiles(5).ErrorDesc = 'The URL you asked for does not exist on this website';
+     call checkFile('text-404.htm');
+     if eCode = 0 then
+          ErrorFiles(5).ErrorFile = 'text-404.htm';
+     ErrorFiles(6).ErrorNum = 412;
+     ErrorFiles(6).ErrorDesc = 'File already exists';
+     call checkFile('text-412.htm');
+     if eCode = 0 then
+          ErrorFiles(6).ErrorFile = 'text-412.htm';
+     ErrorFiles(7).ErrorNum = 413;
+     ErrorFiles(7).ErrorDesc = 'This server cannot handle your request';
+     call checkFile('text-413.htm');
+     if eCode = 0 then
+          ErrorFiles(7).ErrorFile = 'text-413.htm';
+     ErrorFiles(8).ErrorNum = 500;
+     ErrorFiles(8).ErrorDesc = 'Internal error';
+     call checkFile('text-500.htm');
+     if eCode = 0 then
+          ErrorFiles(8).ErrorFile = 'text-500.htm';
+     ErrorFiles(9).ErrorNum = 501;
+     ErrorFiles(9).ErrorDesc = 'The function you requested is not implemented';
+     call checkFile('text-501.htm');
+     if eCode = 0 then
+          ErrorFiles(9).ErrorFile = 'text-501.htm';
+     ErrorFiles(10).ErrorNum = 502;
+     ErrorFiles(10).ErrorDesc = 'This server is currently overloaded - please try again later';
+     call checkFile('text-502.htm');
+     if eCode = 0 then
+          ErrorFiles(10).ErrorFile = 'text-502.htm';
+
+     defaultURL(1) = 'index.htm';
+     defaultURL(2) = 'index.html';
+     defaultURL(3) = 'default.htm';
+     defaultURL(4) = 'default.html';
+
+     return(eCode);
+
+/*********************************************/
+checkFile: procedure (fName);
+
+dcl fName           char(32) var;
+
+     io_mode = 1;
+     call s$seq_open(curDir || '>' || ERRORS_DIR || '>' || fName,
+                     io_mode, port_id, eCode);
+     if eCode = 0 then
+          do;
+           call s$close(port_id, dCode);
+           call s$detach_port(port_id, dCode);
+          end;
+
+end checkFile;
+/*********************************************/
+
+end;
+
+

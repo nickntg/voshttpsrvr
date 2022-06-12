@@ -1,0 +1,48 @@
+http_error_response: procedure (error_code, fBuffer,
+                                resp_bytes, rBuffer);
+
+%include 'httpconf';
+
+dcl buffer          char(4096);
+dcl error_code      bin(15);
+dcl fBuffer         char(256) var;
+dcl rBuffer         char(1024);
+dcl resp_bytes      bin(31);
+
+dcl respString      char(1024) var;
+dcl lFileBytes      bin(31);
+dcl i               bin(15);
+dcl bFound          bit(1) aligned;
+
+     fBuffer = '';
+     rBuffer = ' ';
+     resp_bytes = 0;
+
+     i = 1;
+     bFound = '0'b;
+     do while ((i <= MAX_ERRORS) & (bFound = '0'b));
+          if ErrorFiles(i).ErrorNum ^= error_code then
+               i = i + 1;
+          else
+               bFound = '1'b;
+     end;
+
+     if bFound = '0'b then
+          i = 8;
+
+     fBuffer = '';
+     lFileBytes = length(ErrorFiles(i).ErrorDesc);
+     respString = 'HTTP/0.9 ' || ltrim(rtrim(string(error_code))) ||
+                  ' ' || ErrorFiles(i).ErrorDesc || CRLF ||
+                  'Server: NTG' || CRLF ||
+                  'Content-Length: ' || ltrim(rtrim(string(lFileBytes))) || CRLF ||
+                  'Content-Type: text/html' || CRLF || CRLF ||
+                  ErrorFiles(i).ErrorDesc || CRLF || CRLF;
+     resp_bytes = length(respString);
+     rBuffer = substr(respString, 1, resp_bytes);     
+
+     return;
+
+end;
+
+

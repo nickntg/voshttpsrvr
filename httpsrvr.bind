@@ -1,0 +1,15 @@
+name:     httpsrvr;
+entry:    httpsrvr;
+modules:  httpsrvr,
+          http_readconf,
+          http_request,
+          tcp_gethost;        /* TCP/IP name scan functions */
+
+variables: httpconf           shared,
+           MIMETypes          shared,
+           ErrorFiles         shared,
+           defaultURL         shared,
+
+retain;
+
+end;

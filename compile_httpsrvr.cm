@@ -1,0 +1,4 @@
+pl1 http_error_response.pl1 -statistics
+pl1 http_readconf.pl1 -statistics
+pl1 http_request.pl1 -statistics
+c httpsrvr.c -statistics

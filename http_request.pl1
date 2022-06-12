@@ -1,0 +1,213 @@
+http_request: procedure (rcvd_bytes, buffer, 
+                         fBuffer, 
+                         resp_bytes, rBuffer) returns(bin(15));
+
+%include 'httpconf';
+
+dcl buffer          char(4096);
+dcl rcvd_bytes      bin(31);
+dcl fBuffer         char(256) var;
+dcl rBuffer         char(1024);
+dcl resp_bytes      bin(31);
+
+dcl eCode           bin(15);
+
+dcl sRequest        char(4096) var;
+dcl 1 sRequestRedef defined(sRequest),
+     2 sRequestLen  bin(15),
+     2 sRequestData char(4096);
+
+dcl sFunction       char(32) var;
+dcl sURL            char(512) var;
+dcl sHTTP           char(32) var;
+dcl lFileBytes      bin(31);
+
+     eCode = 0;
+     sFunction = '';
+     sURL = '';
+     sHTTP = '';
+     fBuffer = '';
+     rBuffer = ' ';
+     resp_bytes = 0;
+     lFileBytes = 0;
+
+     /* We should parse the complete HTTP request here.
+        For now, all I implement is a very primitive parsing of the first
+        request line */
+
+     sRequestLen = convert(sRequestLen, rcvd_bytes);
+     sRequestData = buffer;
+
+     call parseHeader();
+
+     if eCode ^= 0 then
+          return(eCode);
+
+     if sFunction = 'GET' then
+          call processGETRequest();
+     else
+          do;
+           eCode = 501;
+           return(eCode);
+          end;
+
+     goto endPoint;
+
+/*************************************/
+parseHeader: procedure;
+
+dcl nPos            bin(15);
+dcl sFirst          char(1000) var;
+
+     nPos = scaneq(sRequest, '
+
+');
+
+     /* If no line break, its an invalid request */
+     if nPos = 0 then
+          eCode = 400;
+     else
+          do;
+           sFirst = ltrim(rtrim(substr(sRequest, 1, nPos)));
+           nPos = scaneq(sFirst, ' ');
+           sFunction = substr(sFirst, 1, nPos);
+           sFirst = substr(sFirst, nPos + 2, length(sFirst) - nPos - 1);
+           nPos = scaneq(sFirst, ' ');
+           sURL = substr(sFirst, 1, nPos);
+           sFirst = substr(sFirst, nPos + 2, length(sFirst) - nPos - 1);
+           nPos = scaneq(sFirst, ' ');
+           sHTTP = substr(sFirst, 1, nPos);
+
+           if (sFunction = '') | (sURL = '') | (sHTTP = '') then
+               eCode = 400;
+          end;
+
+end parseHeader;
+/*************************************/
+processGETRequest: procedure;
+
+dcl iDefURL         bin(15);
+dcl iMIME           bin(15);
+dcl sCanURL         char(512) var;
+dcl sCompletePath   char(256) var;
+dcl respString      char(1024) var;
+
+     call canURL(sURL, sCanURL);
+
+     sCompletePath = httpconf.webdir || sCanURL;
+
+     iDefURL = 0;
+
+comeAgain:
+
+     /* Check for file */
+     if fileExists(sCompletePath) = '1'b then
+          do;
+           iMIME = 0;
+           call findMIMEType(sCompletePath, iMIME);
+
+           fBuffer = sCompletePath;
+           respString = 'HTTP/0.9 200 OK' || CRLF ||
+                        'Server: NTG' || CRLF ||
+                        'Content-Length: ' || ltrim(rtrim(string(lFileBytes))) || CRLF ||
+                        'Content-Type: ' || MIMETypes(iMIME).MIMEContent || CRLF || CRLF;
+           resp_bytes = length(respString);
+           rBuffer = substr(respString, 1, resp_bytes);
+
+          end;
+     else
+          do;
+           iDefURL = iDefURL + 1;
+           if iDefURL <= 4 then
+               do;
+                sCompletePath = httpconf.webdir || sCanURL || 
+                                '>' || defaultURL(iDefURL);
+                goto comeAgain;
+               end;
+           else
+               eCode = 404;
+          end;
+
+end processGETRequest;
+/*************************************/
+canURL: procedure (inURL, outURL);
+
+dcl inURL           char(512) var;
+dcl outURL          char(512) var;
+
+     outURL = inURL;
+     outURL = translate(outURL, '>>', '/<');
+     if substr(outURL, 1, 1) ^= '>' then
+          outURL = '>' || outURL;
+     if substr(outURL, length(outURL), 1) = '>' then
+          outURL = substr(outURL, 1, length(outURL) - 1);
+
+end canURL;
+/*************************************/
+fileExists: procedure (fName) returns(bit(1));
+
+dcl fName           char(256) var;
+dcl port_id         bin(15);
+dcl erCode          bin(15);
+dcl io_mode         bin(15);
+dcl fileAuthor      char(65) var;
+
+     io_mode = 1;
+     call s$seq_open(fName, io_mode, port_id, erCode);
+     if erCode = 0 then
+          do;
+           open_file_info.version = 7;
+           call s$get_open_file_info(port_id, open_file_info, fileAuthor, erCode);
+           lFileBytes = open_file_info.last_record_number;
+           call s$close(port_id, erCode);
+           call s$detach_port(port_id, erCode);
+           return('1'b);
+          end;
+     else
+          return('0'b);
+
+end fileExists;
+/*************************************/
+findMIMEType: procedure (fName, iMIME);
+
+dcl fName           char(256) var;
+dcl iMIME           bin(15);
+dcl sExt            char(256) var;
+dcl nPos            bin(15);
+dcl bFound          bit(1) aligned;
+
+     nPos = -1;
+     sExt = fName;
+     do while (nPos ^= 0);
+          nPos = scaneq(sExt, '.');
+          if nPos ^= 0 then
+               sExt = substr(sExt, nPos + 1, length(sExt) - nPos);
+     end;
+
+     if sExt ^= '' then
+          sExt = substr(sExt, 2, length(sExt) - 1);
+     else
+          sExt = '.';
+
+     iMIME = 1;
+     bFound = '0'b;
+     do while ((iMIME <= MAX_MIME_TYPES) & (bFound = '0'b));
+          if MIMETypes(iMIME).MIMEHead ^= sExt then
+               iMIME = iMIME + 1;
+          else
+               bFound = '1'b;
+     end;
+
+     if bFound = '0'b then
+          iMIME = 1;
+
+end findMIMEType;
+/*************************************/
+
+endPoint:
+
+     return(eCode);
+
+end;
+
+
